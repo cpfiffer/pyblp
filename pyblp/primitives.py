@@ -100,6 +100,9 @@ class Products(object):
         X2_data: Data = {}
         if product_formulations[1] is not None:
             X2, X2_formulations, X2_data = product_formulations[1]._build_matrix(product_data)
+            print("Adding column of zeros to X2")
+            zero_mat = np.zeros((X2.shape[0], 4))
+            X2 = np.append(X2, zero_mat, 1)
             if 'shares' in X2_data:
                 raise NameError("shares cannot be included in the formulation for X2.")
 

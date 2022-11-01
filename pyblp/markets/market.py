@@ -202,6 +202,9 @@ class Market(Container):
         if X2 is None:
             X2 = self.products.X2
 
+        # Compute the misc parameters
+        # renegotiation = exp(mu_alpha + sigma_alpha * nu_alpha_i) 
+
         coefficients = self.compute_random_coefficients(sigma, pi)
         if len(coefficients.shape) == 2:
             return X2 @ coefficients
