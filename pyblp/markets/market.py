@@ -211,17 +211,16 @@ class Market(Container):
         sigma_eta = self.sigma[-1,-1]
         nu_alpha_i = self.agents.nodes[:,-3]
         nu_eta_i = self.agents.nodes[:,-1]
+        p_jt = self.products.X1[self.t,2] 
+        k_jt = self.products.X2[self.t,2]
 
         # prices = problem.products.prices[problem.products.market_ids.flat == t]
 
-        print(self.agents.nodes)
-        print(self.agents.demographics)
-        print(self.products.prices.shape)
-        
-        renegotiation = np.exp(mu_alpha + sigma_alpha * nu_alpha_i)  * np.log(scipy.special.expit(mu_eta + sigma_eta * nu_eta_i) * (p_ijt - k_ijt) * k_ijt)
+        print(coefficients)
+        renegotiation = np.exp(mu_alpha + sigma_alpha * nu_alpha_i)  * np.log(scipy.special.expit(mu_eta + sigma_eta * nu_eta_i) * (p_jt - k_jt) * k_jt)
 
         if len(coefficients.shape) == 2:
-            return X2 @ coefficients
+            return X2 @ coefficients + renegotiation
 
         assert len(coefficients.shape) == 3
         return (X2[..., None] * coefficients).sum(axis=1)

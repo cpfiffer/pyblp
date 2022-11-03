@@ -12,25 +12,25 @@ import pandas as pd
 id_data = pyblp.build_id_data(T=10, J=15, F=5)
 
 # An Integration builds agent data
-integration = pyblp.Integration('product', 9)
+integration = pyblp.Integration('product', 7)
 print(integration)
 
 # Create a simulator
 sim = pyblp.Simulation(
     product_formulations=(
-        pyblp.Formulation('1 + prices + x'),
-        pyblp.Formulation('0 + x'),
+        pyblp.Formulation('1 + x + prices'),
+        pyblp.Formulation('0 + x + prices + k'),
         pyblp.Formulation('0 + x + z')
     ),
     beta = [1, -2, 2], # Demand side parameters
-    sigma=np.diag(np.ones(5)),
+    sigma=np.diag(np.ones(7)),
     gamma=[1,4], # Supply side parameters
-    pi = np.zeros((5, 1)),
+    # pi = np.zeros((5, 1)),
     product_data=id_data,
-    agent_formulation=pyblp.Formulation("1"),
+    # agent_formulation=pyblp.Formulation("1"),
     integration=integration,
     seed=1,
-    rc_types=['linear', 'linear', 'log', 'logit', 'log']
+    rc_types=['linear', 'linear', 'linear', 'linear', 'log', 'logit', 'log']
 )
 
 sim_results = sim.replace_endogenous()
