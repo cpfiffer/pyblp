@@ -184,7 +184,7 @@ class Parameters(object):
         """
 
         # store labels
-        self.sigma_labels = [str(f) for f in economy._X2_formulations]
+        self.sigma_labels = [str(f) for f in economy._X2_formulations] + ["mu_alpha", "sigma_alpha", "mu_eta", "sigma_eta"]
         self.pi_labels = [str(f) for f in economy._demographics_formulations]
         self.rho_labels = [str(i) for i in economy.unique_nesting_ids]
         self.beta_labels = [str(f) for f in economy._X1_formulations]
@@ -535,6 +535,12 @@ class Parameters(object):
             (BetaParameter, np.c_[np.array(self.beta_labels)]),
             (GammaParameter, np.c_[np.array(self.gamma_labels)]),
         ]
+
+        for (t,v) in items:
+            print("==========")
+            print(t)
+            print(v)
+
         return [v[p.location] for t, v in items for p in self.unfixed if isinstance(p, t)]
 
     def expand(self, theta_like: Array, nullify: bool = False) -> Tuple[Array, Array, Array, Array, Array]:

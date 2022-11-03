@@ -202,10 +202,24 @@ class Market(Container):
         if X2 is None:
             X2 = self.products.X2
 
-        # Compute the misc parameters
-        # renegotiation = exp(mu_alpha + sigma_alpha * nu_alpha_i) 
-
         coefficients = self.compute_random_coefficients(sigma, pi)
+
+        # Compute the misc parameters
+        mu_alpha = self.sigma[-4,-4]
+        sigma_alpha = self.sigma[-3,-3]
+        mu_eta = self.sigma[-2,-2]
+        sigma_eta = self.sigma[-1,-1]
+        nu_alpha_i = self.agents.nodes[:,-3]
+        nu_eta_i = self.agents.nodes[:,-1]
+
+        # prices = problem.products.prices[problem.products.market_ids.flat == t]
+
+        print(self.agents.nodes)
+        print(self.agents.demographics)
+        print(self.products.prices.shape)
+        
+        renegotiation = np.exp(mu_alpha + sigma_alpha * nu_alpha_i)  * np.log(scipy.special.expit(mu_eta + sigma_eta * nu_eta_i) * (p_ijt - k_ijt) * k_ijt)
+
         if len(coefficients.shape) == 2:
             return X2 @ coefficients
 
