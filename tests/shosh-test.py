@@ -9,39 +9,51 @@ import numpy as np
 import pandas as pd
 
 # SEt up some id data
-id_data = pyblp.build_id_data(T=10, J=15, F=5)
+# T is markets
+# J is products per market
+# F is firms across all markets
+id_data = pyblp.data_to_dict(pyblp.build_id_data(T=10, J=15, F=5))
+fake_k = np.random.lognormal(mean = -1, size = id_data['market_ids'].shape)
+id_data['k'] = fake_k
 
 # An Integration builds agent data
-integration = pyblp.Integration('product', 7)
-print(integration)
+integration = pyblp.Integration('product', 5)
 
 # Create a simulator
 sim = pyblp.Simulation(
     product_formulations=(
-        pyblp.Formulation('1 + x + prices'),
-        pyblp.Formulation('0 + x + prices + k'),
+        pyblp.Formulation('1 + x + prices + k'),
+        pyblp.Formulation('0 + x'),
         pyblp.Formulation('0 + x + z')
     ),
-    beta = [1, -2, 2], # Demand side parameters
-    sigma=np.diag(np.ones(7)),
+    beta = [1, 2, -2, 0], # Demand side parameters
+    sigma=np.diag(np.ones(5)),
     gamma=[1,4], # Supply side parameters
-    # pi = np.zeros((5, 1)),
+    pi = np.array([[0, 1.0, 1.5, 0.2, 0.3]]).T,
     product_data=id_data,
-    # agent_formulation=pyblp.Formulation("1"),
+    agent_formulation=pyblp.Formulation("1"),
     integration=integration,
     seed=1,
-    rc_types=['linear', 'linear', 'linear', 'linear', 'log', 'logit', 'log']
+    rc_types=['linear', 'linear', 'log', 'logit', 'log']
 )
 
 sim_results = sim.replace_endogenous()
 
 problem = sim_results.to_problem()
+
+print("Going to try to solve it now, homie")
 results = problem.solve(
     sigma = 0.5 * sim_results._sigma,
     pi = 0.5 * sim_results._pi,
-    beta = [None, 0.5 * sim_results._beta[1], None]
+    beta = [None, None, 0.5 * sim_results._beta[2], None],
+    finite_differences=True,
+    optimization=pyblp.Optimization('l-bfgs-b',compute_gradient=True)
 )
 
 
-print(np.c_[sim.beta, results.beta])
+# print(np.c_[sim.beta, results.beta])
 
+print(np.hstack([sim_results._beta, results.beta]))
+
+print(results.pi.round(2))
+print(sim_results._pi.round(2))

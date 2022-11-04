@@ -205,19 +205,31 @@ class Market(Container):
         coefficients = self.compute_random_coefficients(sigma, pi)
 
         # Compute the misc parameters
-        mu_alpha = self.sigma[-4,-4]
-        sigma_alpha = self.sigma[-3,-3]
-        mu_eta = self.sigma[-2,-2]
-        sigma_eta = self.sigma[-1,-1]
+        mu_alpha = self.sigma[-4,0]
+        sigma_alpha = self.sigma[-3,0]
+        mu_eta = self.sigma[-2,0]
+        sigma_eta = self.sigma[-1,0]
         nu_alpha_i = self.agents.nodes[:,-3]
         nu_eta_i = self.agents.nodes[:,-1]
+
+        # X1 is a J x 4 mat
         p_jt = self.products.X1[self.t,2] 
-        k_jt = self.products.X2[self.t,2]
+        k_jt = self.products.X1[self.t,3]
 
         # prices = problem.products.prices[problem.products.market_ids.flat == t]
 
-        print(coefficients)
         renegotiation = np.exp(mu_alpha + sigma_alpha * nu_alpha_i)  * np.log(scipy.special.expit(mu_eta + sigma_eta * nu_eta_i) * (p_jt - k_jt) * k_jt)
+        # print("========")
+        # print("self.t: ", self.t)
+        # print("self.products.X1.shape: ", self.products.X1.shape)
+        # print("self.products.X1: ", self.products.X1)
+        # print("coefs.shape: ", coefficients.shape)
+        # print("coefs: ", coefficients)
+        # print("renegotiation.shape: ", renegotiation.shape)
+        # print("renegotiation: ", renegotiation)
+        # print("np.exp(mu_alpha + sigma_alpha * nu_alpha_i): ", np.exp(mu_alpha + sigma_alpha * nu_alpha_i))
+        # print("scipy.special.expit(mu_eta + sigma_eta * nu_eta_i): ", scipy.special.expit(mu_eta + sigma_eta * nu_eta_i))
+        # print("(p_jt - k_jt) * k_jt: ", (p_jt - k_jt) * k_jt)
 
         if len(coefficients.shape) == 2:
             return X2 @ coefficients + renegotiation

@@ -536,11 +536,6 @@ class Parameters(object):
             (GammaParameter, np.c_[np.array(self.gamma_labels)]),
         ]
 
-        for (t,v) in items:
-            print("==========")
-            print(t)
-            print(v)
-
         return [v[p.location] for t, v in items for p in self.unfixed if isinstance(p, t)]
 
     def expand(self, theta_like: Array, nullify: bool = False) -> Tuple[Array, Array, Array, Array, Array]:

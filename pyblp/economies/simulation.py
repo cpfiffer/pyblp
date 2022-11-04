@@ -416,10 +416,15 @@ class Simulation(Economy):
         market_groups = Groups(market_ids)
         shares = extract_matrix(product_data, 'shares')
         prices = extract_matrix(product_data, 'prices')
+        k = extract_matrix(product_data, 'k')
         if shares is None:
             shares = state.uniform(size=market_ids.size) / market_groups.expand(market_groups.counts)
         if prices is None:
-            prices = state.uniform(size=market_ids.size)
+            if k is None:
+                prices = state.uniform(size=market_ids.size)
+            else:
+                # Inflate initial prices over k, such that k << p
+                prices = k[:,0] / state.uniform(size=market_ids.size)
 
         # load or simulate product variables in sorted order so that a seed always gives the same draws
         product_mapping = {
