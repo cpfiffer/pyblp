@@ -212,6 +212,13 @@ class Market(Container):
         nu_alpha_i = self.agents.nodes[:,-3]
         nu_eta_i = self.agents.nodes[:,-1]
 
+        print(self.pi)
+
+        # print(self.pi.shape)
+        # print(self.sigma.shape)
+        # print(self.beta.shape)
+        # print(self.agents.nodes)
+
         # X1 is a J x 4 mat
         p_jt = self.products.X1[self.t,2] 
         k_jt = self.products.X1[self.t,3]
