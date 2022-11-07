@@ -205,14 +205,18 @@ class Market(Container):
         coefficients = self.compute_random_coefficients(sigma, pi)
 
         # Compute the misc parameters
-        mu_alpha = self.sigma[-4,0]
-        sigma_alpha = self.sigma[-3,0]
-        mu_eta = self.sigma[-2,0]
-        sigma_eta = self.sigma[-1,0]
-        nu_alpha_i = self.agents.nodes[:,-3]
-        nu_eta_i = self.agents.nodes[:,-1]
+        # mu_alpha = self.sigma[-4,0]
+        # sigma_alpha = self.sigma[-3,0]
+        # mu_eta = self.sigma[-2,0]
+        # sigma_eta = self.sigma[-1,0]
 
-        print(self.pi)
+        mu_alpha = self.pi[-4]
+        sigma_alpha = self.pi[-3]
+        mu_eta = self.pi[-2]
+        sigma_eta = self.pi[-1]
+
+        nu_alpha_i = self.agents.nodes[:,-2]
+        nu_eta_i = self.agents.nodes[:,-1]
 
         # print(self.pi.shape)
         # print(self.sigma.shape)

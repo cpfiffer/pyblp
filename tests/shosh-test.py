@@ -17,7 +17,7 @@ fake_k = np.random.lognormal(mean = -1, size = id_data['market_ids'].shape)
 id_data['k'] = fake_k
 
 # An Integration builds agent data
-integration = pyblp.Integration('product', 2)
+integration = pyblp.Integration('product', 9)
 
 # Create a simulator
 sim = pyblp.Simulation(
@@ -46,8 +46,7 @@ results = problem.solve(
     sigma = 0.5 * sim_results._sigma,
     pi = 0.5 * sim_results._pi,
     beta = [None, None, 0.5 * sim_results._beta[2], None],
-    finite_differences=True,
-    optimization=pyblp.Optimization('l-bfgs-b',compute_gradient=True)
+    finite_differences=True
 )
 
 
