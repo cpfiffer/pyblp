@@ -12,7 +12,7 @@ import pandas as pd
 # T is markets
 # J is products per market
 # F is firms across all markets
-id_data = pyblp.data_to_dict(pyblp.build_id_data(T=10, J=15, F=5))
+id_data = pyblp.data_to_dict(pyblp.build_id_data(T=15, J=20, F=10))
 fake_k = np.random.lognormal(mean = -1, size = id_data['market_ids'].shape)
 id_data['k'] = fake_k
 
@@ -54,5 +54,4 @@ results = problem.solve(
 
 print(np.hstack([sim_results._beta, results.beta]))
 
-print(results.pi.round(2))
-print(sim_results._pi.round(2))
+np.hstack([results.pi.round(2), sim_results._pi.round(2)])

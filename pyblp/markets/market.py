@@ -229,7 +229,7 @@ class Market(Container):
 
         # prices = problem.products.prices[problem.products.market_ids.flat == t]
 
-        renegotiation = np.exp(mu_alpha + sigma_alpha * nu_alpha_i)  * np.log(scipy.special.expit(mu_eta + sigma_eta * nu_eta_i) * (p_jt - k_jt) * k_jt)
+        # renegotiation = np.exp(mu_alpha + sigma_alpha * nu_alpha_i)  * np.log(scipy.special.expit(mu_eta + sigma_eta * nu_eta_i) * (p_jt - k_jt) * k_jt)
         # print("========")
         # print("self.t: ", self.t)
         # print("self.products.X1.shape: ", self.products.X1.shape)
@@ -243,7 +243,7 @@ class Market(Container):
         # print("(p_jt - k_jt) * k_jt: ", (p_jt - k_jt) * k_jt)
 
         if len(coefficients.shape) == 2:
-            return X2 @ coefficients + renegotiation
+            return X2 @ coefficients# + renegotiation
 
         assert len(coefficients.shape) == 3
         return (X2[..., None] * coefficients).sum(axis=1)
