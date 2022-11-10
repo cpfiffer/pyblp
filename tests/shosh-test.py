@@ -12,12 +12,12 @@ import pandas as pd
 # T is markets
 # J is products per market
 # F is firms across all markets
-id_data = pyblp.data_to_dict(pyblp.build_id_data(T=15, J=20, F=10))
-fake_k = np.random.lognormal(mean = -1, size = id_data['market_ids'].shape)
+id_data = pyblp.data_to_dict(pyblp.build_id_data(T=5, J=10, F=7))
+fake_k = np.random.lognormal(mean = 0, size = id_data['market_ids'].shape)
 id_data['k'] = fake_k
 
 # An Integration builds agent data
-integration = pyblp.Integration('product', 9)
+integration = pyblp.Integration('product', 6)
 
 # Create a simulator
 sim = pyblp.Simulation(
@@ -46,7 +46,7 @@ results = problem.solve(
     sigma = 0.5 * sim_results._sigma,
     pi = 0.5 * sim_results._pi,
     beta = [None, None, 0.5 * sim_results._beta[2], None],
-    finite_differences=True
+    finite_differences=False
 )
 
 
