@@ -296,6 +296,8 @@ class Parameters(object):
         if allow_nans and values is None:
             return matrix
 
+        print(shapes)
+        print(condition_name)
         # validate the matrix
         if values is not None:
             matrix = np.c_[np.asarray(values, options.dtype)]

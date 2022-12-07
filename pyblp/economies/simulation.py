@@ -416,7 +416,6 @@ class Simulation(Economy):
         market_groups = Groups(market_ids)
         shares = extract_matrix(product_data, 'shares')
         prices = extract_matrix(product_data, 'prices')
-        k = extract_matrix(product_data, 'k')
         if shares is None:
             shares = state.uniform(size=market_ids.size) / market_groups.expand(market_groups.counts)
         if prices is None:
@@ -648,11 +647,13 @@ class Simulation(Economy):
         def market_factory(s: Hashable) -> Tuple[SimulationMarket, Array, Array, Iteration, bool, bool, bool]:
             """Build a market along with arguments used to compute prices and shares."""
             assert costs is not None and prices is not None and iteration is not None
+            print('market factory')
             market_s = SimulationMarket(
                 self, s, self._parameters, self.sigma, self.pi, self.rho, self.beta, self.gamma, delta
             )
             costs_s = costs[self._product_market_indices[s]]
             prices_s = prices[self._product_market_indices[s]]
+            print("market factory done")
             return market_s, costs_s, prices_s, iteration, constant_costs, compute_gradients, compute_hessians
 
         # compute prices and market shares market-by-market, also collecting potentially updated delta and costs

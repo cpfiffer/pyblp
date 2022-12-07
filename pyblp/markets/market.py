@@ -210,10 +210,10 @@ class Market(Container):
         # mu_eta = self.sigma[-2,0]
         # sigma_eta = self.sigma[-1,0]
 
-        mu_alpha = self.pi[-4]
-        sigma_alpha = self.pi[-3]
-        mu_eta = self.pi[-2]
-        sigma_eta = self.pi[-1]
+        mu_alpha = self.sigma[-4,-4]
+        sigma_alpha = self.sigma[-3,-3]
+        mu_eta = self.sigma[-2,-2]
+        sigma_eta = self.sigma[-1,-1]
 
         nu_alpha_i = self.agents.nodes[:,-2]
         nu_eta_i = self.agents.nodes[:,-1]
@@ -223,9 +223,18 @@ class Market(Container):
         # print(self.beta.shape)
         # print(self.agents.nodes)
 
-        # X1 is a J x 4 mat
-        p_jt = self.products.X1[self.t,2] 
-        k_jt = self.products.X1[self.t,3]
+        print(self.products.X2.shape)
+        print(coefficients.shape)
+
+        # print(self.products)
+        p_jt = self.products.X2[:,0]
+        k_jt = self.products.X2[:,1]
+
+        print(p_jt)
+        print(k_jt)
+        print(self.products.X2)
+        print(self.products)
+        print(self)
 
         # prices = problem.products.prices[problem.products.market_ids.flat == t]
 
@@ -246,7 +255,7 @@ class Market(Container):
             return X2 @ coefficients + renegotiation
 
         assert len(coefficients.shape) == 3
-        return (X2[..., None] * coefficients).sum(axis=1)
+        return (X2[..., None] * coefficients).sum(axis=1) + renegotiation
 
     def update_delta_with_variable(self, name: str, variable: Array) -> Array:
         """Update delta to reflect a changed variable by adding any parameter-weighted characteristic changes to X1."""
@@ -845,6 +854,7 @@ class Market(Container):
             return updated_x, weights, updated_x_jacobian
 
         # solve the fixed point problem
+        print('doing fixed point')
         prices, stats = iteration._iterate(prices, contraction)
 
         # add padding around the universal display
