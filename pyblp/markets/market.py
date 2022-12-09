@@ -200,9 +200,11 @@ class Market(Container):
             self, X2: Optional[Array] = None, sigma: Optional[Array] = None, pi: Optional[Array] = None) -> Array:
         """Compute mu. By default, use unchanged X2 and parameters."""
         if X2 is None:
+            # print("Replacing")
             X2 = self.products.X2
 
         coefficients = self.compute_random_coefficients(sigma, pi)
+        return X2 @ coefficients
 
         # Compute the misc parameters
         # mu_alpha = self.sigma[-4,0]
@@ -223,22 +225,54 @@ class Market(Container):
         # print(self.beta.shape)
         # print(self.agents.nodes)
 
-        print(self.products.X2.shape)
-        print(coefficients.shape)
+        # print(self.products.X2.shape)
+        # print(coefficients.shape)
 
         # print(self.products)
-        p_jt = self.products.X2[:,0]
-        k_jt = self.products.X2[:,1]
+        p_jt = X2[:,0]
+        k_jt = X2[:,1]
 
-        print(p_jt)
-        print(k_jt)
-        print(self.products.X2)
-        print(self.products)
-        print(self)
+        # Set prices to logs before premult
+        # X2[:,0] = np.log(X2[:,0])
+
+        # print(p_jt)
+        # print(k_jt)
+        # print(X2)
+        # print(self.products)
+        # print(self)
 
         # prices = problem.products.prices[problem.products.market_ids.flat == t]
 
-        renegotiation = np.exp(mu_alpha + sigma_alpha * nu_alpha_i)  * np.log(scipy.special.expit(mu_eta + sigma_eta * nu_eta_i) * (p_jt - k_jt) * k_jt)
+
+        A = scipy.special.expit(mu_eta + sigma_eta * nu_eta_i)
+        B = np.exp(mu_alpha + sigma_alpha * nu_alpha_i)
+        P = (p_jt - k_jt) * k_jt
+        renegotiation = np.zeros((p_jt.shape[0], coefficients.shape[1]))
+        for i in range(p_jt.shape[0]):
+            renegotiation[i,:] = B * np.log(A * P[i])
+
+        # renegotiation
+        # print("k_jt")
+        # print(np.array_str(k_jt, precision=2, suppress_small=True))
+        # print("p_jt")
+        # print(np.array_str(p_jt, precision=2, suppress_small=True))
+        # print("A")
+        # print(np.array_str(A, precision=2, suppress_small=True))
+        # print("B")
+        # print(np.array_str(B, precision=2, suppress_small=True))
+        # print("P")
+        # print(np.array_str(P, precision=2, suppress_small=True))
+        # print("Renegotiation")
+        # print(np.array_str(renegotiation, precision=2, suppress_small=True))
+        # print("Coefficients")
+        # print(np.array_str(coefficients, precision=2, suppress_small=True))
+        # print("Result")
+        # print(np.array_str(X2 @ coefficients + renegotiation, precision=2, suppress_small=True))
+
+        # if any(np.isnan(renegotiation)):
+        #     azzzzzsdadasd
+        # print(np.array_str(renegotiation, precision=2, suppress_small=True))
+
         # print("========")
         # print("self.t: ", self.t)
         # print("self.products.X1.shape: ", self.products.X1.shape)
@@ -250,6 +284,8 @@ class Market(Container):
         # print("np.exp(mu_alpha + sigma_alpha * nu_alpha_i): ", np.exp(mu_alpha + sigma_alpha * nu_alpha_i))
         # print("scipy.special.expit(mu_eta + sigma_eta * nu_eta_i): ", scipy.special.expit(mu_eta + sigma_eta * nu_eta_i))
         # print("(p_jt - k_jt) * k_jt: ", (p_jt - k_jt) * k_jt)
+        # print(X2.shape)
+        # print(coefficients.shape)
 
         if len(coefficients.shape) == 2:
             return X2 @ coefficients + renegotiation
@@ -854,7 +890,6 @@ class Market(Container):
             return updated_x, weights, updated_x_jacobian
 
         # solve the fixed point problem
-        print('doing fixed point')
         prices, stats = iteration._iterate(prices, contraction)
 
         # add padding around the universal display
