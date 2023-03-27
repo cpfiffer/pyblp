@@ -724,6 +724,668 @@ class ProblemEconomy(Economy):
             step += 1
             step_start_time = time.time()
 
+    def evaluate(
+            self, sigma: Optional[Any] = None, pi: Optional[Any] = None, rho: Optional[Any] = None,
+            beta: Optional[Any] = None, gamma: Optional[Any] = None, sigma_bounds: Optional[Tuple[Any, Any]] = None,
+            pi_bounds: Optional[Tuple[Any, Any]] = None, rho_bounds: Optional[Tuple[Any, Any]] = None,
+            beta_bounds: Optional[Tuple[Any, Any]] = None, gamma_bounds: Optional[Tuple[Any, Any]] = None,
+            delta: Optional[Any] = None, method: str = '2s', initial_update: Optional[bool] = None,
+            optimization: Optional[Optimization] = None, scale_objective: bool = True, check_optimality: str = 'both',
+            finite_differences: bool = False, error_behavior: str = 'revert', error_punishment: float = 1,
+            delta_behavior: str = 'first', iteration: Optional[Iteration] = None, fp_type: str = 'safe_linear',
+            shares_bounds: Optional[Tuple[Any, Any]] = (1e-300, None), costs_bounds: Optional[Tuple[Any, Any]] = None,
+            W: Optional[Any] = None, center_moments: bool = True, W_type: str = 'robust', se_type: str = 'robust',
+            micro_moments: Sequence[MicroMoment] = (), micro_sample_covariances: Optional[Any] = None,
+            resample_agent_data: Optional[Callable[[int], Optional[Mapping]]] = None) -> (
+            ProblemResults):
+        r"""Solve the problem.
+
+        The problem is solved in one or more GMM steps. During each step, any parameters in :math:`\theta` are optimized
+        to minimize the GMM objective value, giving the estimated :math:`\hat{\theta}`. If there are no parameters in
+        :math:`\theta` (for example, in the logit model there are no nonlinear parameters and all linear parameters can
+        be concentrated out), the objective is evaluated once during the step.
+
+        If there are nonlinear parameters, the mean utility, :math:`\delta(\theta)` is computed market-by-market with
+        fixed point iteration. Otherwise, it is computed analytically according to the solution of the logit model. If a
+        supply side is to be estimated, marginal costs, :math:`c(\theta)`, are also computed market-by-market. Linear
+        parameters are then estimated, which are used to recover structural error terms, which in turn are used to form
+        the objective value. By default, the objective gradient is computed as well.
+
+        .. note::
+
+           This method supports :func:`parallel` processing. If multiprocessing is used, market-by-market computation of
+           :math:`\delta(\theta)` (and :math:`\tilde{c}(\theta)` if a supply side is estimated), along with associated
+           Jacobians, will be distributed among the processes.
+
+        Parameters
+        ----------
+        sigma : `array-like, optional`
+            Configuration for which elements in the lower-triangular Cholesky root of the covariance matrix for
+            unobserved taste heterogeneity, :math:`\Sigma`, are fixed at zero and starting values for the other
+            elements, which, if not fixed by ``sigma_bounds``, are in the vector of unknown elements, :math:`\theta`.
+
+            Rows and columns correspond to columns in :math:`X_2`, which is formulated according
+            ``product_formulations`` in :class:`Problem`. If :math:`X_2` was not formulated, this should not be
+            specified, since the logit model will be estimated.
+
+            Values above the diagonal are ignored. Zeros are assumed to be zero throughout estimation and nonzeros are,
+            if not fixed by ``sigma_bounds``, starting values for unknown elements in :math:`\theta`. If any columns are
+            fixed at zero, only the first few columns of integration nodes (specified in :class:`Problem`) will be used.
+
+            To have nonzero covariances for only a subset of the random coefficients, the characteristics for those
+            random coefficients with zero covariances should come first in :math:`X_2`. This can be seen by looking at
+            the expression for :math:`\Sigma\Sigma'`, the actual covariance matrix of the random coefficients.
+
+        pi : `array-like, optional`
+            Configuration for which elements in the matrix of parameters that measures how agent tastes vary with
+            demographics, :math:`\Pi`, are fixed at zero and starting values for the other elements, which, if not fixed
+            by ``pi_bounds``, are in the vector of unknown elements, :math:`\theta`.
+
+            Rows correspond to the same product characteristics as in ``sigma``. Columns correspond to columns in
+            :math:`d`, which is formulated according to ``agent_formulation`` in :class:`Problem`. If :math:`d` was not
+            formulated, this should not be specified.
+
+            Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by ``pi_bounds``, starting
+            values for unknown elements in :math:`\theta`.
+
+        rho : `array-like, optional`
+            Configuration for which elements in the vector of parameters that measure within nesting group correlation,
+            :math:`\rho`, are fixed at zero and starting values for the other elements, which, if not fixed by
+            ``rho_bounds``, are in the vector of unknown elements, :math:`\theta`.
+
+            If this is a scalar, it corresponds to all groups defined by the ``nesting_ids`` field of ``product_data``
+            in :class:`Problem`. If this is a vector, it must have :math:`H` elements, one for each nesting group.
+            Elements correspond to group IDs in the sorted order of :attr:`Problem.unique_nesting_ids`. If nesting IDs
+            were not specified, this should not be specified either.
+
+            Zeros are assumed to be zero throughout estimation and nonzeros are, if not fixed by ``rho_bounds``,
+            starting values for unknown elements in :math:`\theta`.
+
+        beta: `array-like, optional`
+            Configuration for which elements in the vector of demand-side linear parameters, :math:`\beta`, are
+            concentrated out of the problem. Usually, this is left unspecified, unless there is a supply side, in which
+            case parameters on endogenous product characteristics cannot be concentrated out of the problem. Values
+            specify which elements are fixed at zero and starting values for the other elements, which, if not fixed by
+            ``beta_bounds``, are in the vector of unknown elements, :math:`\theta`.
+
+            Elements correspond to columns in :math:`X_1`, which is formulated according to ``product_formulations`` in
+            :class:`Problem`.
+
+            Both ``None`` and ``numpy.nan`` indicate that the parameter should be concentrated out of the problem. That
+            is, it will be estimated, but does not have to be included in :math:`\theta`. Zeros are assumed to be zero
+            throughout estimation and nonzeros are, if not fixed by ``beta_bounds``, starting values for unknown
+            elements in :math:`\theta`.
+
+        gamma: `array-like, optional`
+            Configuration for which elements in the vector of supply-side linear parameters, :math:`\gamma`, are
+            concentrated out of the problem. Usually, this is left unspecified. Values specify which elements are fixed
+            at zero and starting values for the other elements, which, if not fixed by ``gamma_bounds``, are in the
+            vector of unknown elements, :math:`\theta`.
+
+            Elements correspond to columns in :math:`X_3`, which is formulated according to ``product_formulations`` in
+            :class:`Problem`. If :math:`X_3` was not formulated, this should not be specified.
+
+            Both ``None`` and ``numpy.nan`` indicate that the parameter should be concentrated out of the problem. That
+            is, it will be estimated, but does not have to be included in :math:`\theta`. Zeros are assumed to be zero
+            throughout estimation and nonzeros are, if not fixed by ``gamma_bounds``, starting values for unknown
+            elements in :math:`\theta`.
+
+        sigma_bounds : `tuple, optional`
+            Configuration for :math:`\Sigma` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
+            same size as ``sigma``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in ``sigma``. If ``optimization`` does not support bounds, these will be ignored. If bounds are
+            supported, the diagonal of ``sigma`` is by default bounded from below by zero.
+
+            Values above the diagonal are ignored. Lower and upper bounds corresponding to zeros in ``sigma`` are set to
+            zero. Setting a lower bound equal to an upper bound fixes the corresponding element, removing it from
+            :math:`\theta`. Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to
+            ``numpy.inf`` in ``ub``.
+
+        pi_bounds : `tuple, optional`
+            Configuration for :math:`\Pi` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
+            same size as ``pi``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in ``pi``. If ``optimization`` does not support bounds, these will be ignored. By default,
+            ``pi`` is unbounded.
+
+            Lower and upper bounds corresponding to zeros in ``pi`` are set to zero. Setting a lower bound equal to an
+            upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
+            ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+
+        rho_bounds : `tuple, optional`
+            Configuration for :math:`\rho` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
+            same size as ``rho``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in ``rho``. If ``optimization`` does not support bounds, these will be ignored.
+
+            If bounds are supported, ``rho`` is by default bounded from below by ``0``, which corresponds to the simple
+            logit model, and bounded from above by ``0.99`` because values greater than ``1`` are inconsistent with
+            utility maximization.
+
+            Lower and upper bounds corresponding to zeros in ``rho`` are set to zero. Setting a lower bound equal to an
+            upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
+            ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+
+        beta_bounds : `tuple, optional`
+            Configuration for :math:`\beta` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
+            same size as ``beta``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in ``beta``. If ``optimization`` does not support bounds, these will be ignored.
+
+            Usually, this is left unspecified unless there is a supply side, in which case parameters on endogenous
+            product characteristics cannot be concentrated out of the problem. It is generally a good idea to constrain
+            such parameters to be nonzero so that the intra-firm Jacobian of shares with respect to prices does not
+            become singular.
+
+            By default, all non-concentrated out parameters are unbounded. Bounds should only be specified for
+            parameters that are included in :math:`\theta`; that is, those with initial values specified in ``beta``.
+
+            Lower and upper bounds corresponding to zeros in ``beta`` are set to zero. Setting a lower bound equal to an
+            upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
+            ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+
+        gamma_bounds : `tuple, optional`
+            Configuration for :math:`\gamma` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub`` are of the
+            same size as ``gamma``. Each element in ``lb`` and ``ub`` determines the lower and upper bound for its
+            counterpart in ``gamma``. If ``optimization`` does not support bounds, these will be ignored.
+
+            By default, all non-concentrated out parameters are unbounded. Bounds should only be specified for
+            parameters that are included in :math:`\theta`; that is, those with initial values specified in ``gamma``.
+
+            Lower and upper bounds corresponding to zeros in ``gamma`` are set to zero. Setting a lower bound equal to
+            an upper bound fixes the corresponding element, removing it from :math:`\theta`. Both ``None`` and
+            ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+
+        delta : `array-like, optional`
+            Initial values for the mean utility, :math:`\delta`. If there are any nonlinear parameters, these are the
+            values at which the fixed point iteration routine will start during the first objective evaluation. By
+            default, the solution to the logit model in :eq:`logit_delta` is used. If :math:`\rho` is specified, the
+            solution to the nested logit model in :eq:`nested_logit_delta` under the initial ``rho`` is used instead.
+        method : `str, optional`
+            The estimation routine that will be used. The following methods are supported:
+
+                - ``'1s'`` - One-step GMM.
+
+                - ``'2s'`` (default) - Two-step GMM.
+
+            Iterated GMM can be manually implemented by executing single GMM steps in a loop, in which after the first
+            iteration, nonlinear parameters and weighting matrices from the last :class:`ProblemResults` are passed as
+            arguments.
+
+        initial_update : `bool, optional`
+            Whether to update starting values for the mean utility :math:`\delta` and the weighting matrix :math:`W` at
+            the initial parameter values before the first GMM step. This initial update will be called a zeroth step.
+
+            By default, an initial update will not be used unless ``micro_moments`` are specified without an initial
+            weighting matrix ``W``.
+
+            .. note::
+
+               When trying multiple parameter starting values to verify that the optimization routine converges to the
+               same optimum, using ``initial_update`` is not recommended because different weighting matrices will be
+               used for these different runs. A better option is to use ``optimization=Optimization('return')`` at the
+               best guess for parameter values and pass :attr:`ProblemResults.updated_W` to ``W`` for each set of
+               different parameter starting values.
+
+        optimization : `Optimization, optional`
+            :class:`Optimization` configuration for how to solve the optimization problem in each GMM step, which is
+            only used if there are unfixed nonlinear parameters over which to optimize. By default,
+            ``Optimization('l-bfgs-b', {'ftol': 0, 'gtol': 1e-8})`` is used. If available, ``Optimization('knitro')``
+            may be preferable. Generally, it is recommended to consider a number of different optimization routines and
+            starting values, verifying that :math:`\hat{\theta}` satisfies both the first and second order conditions.
+            Choosing a routine that supports bounds (and configuring bounds) is typically a good idea. Choosing a
+            routine that does not use analytic gradients will often down estimation.
+        scale_objective : `bool, optional`
+            Whether to scale the objective in :eq:`objective` by :math:`N`, the number of observations, in which case
+            the objective after two GMM steps is equal to the :math:`J` statistic from :ref:`references:Hansen (1982)`.
+            By default, the objective is scaled by :math:`N`.
+
+            In theory the scale of the objective should not matter, but in practice having similar objective values for
+            different problem sizes is helpful because similar optimization tolerances can be used.
+
+        check_optimality : `str, optional`
+            How to check for optimality (first and second order conditions) after the optimization routine finishes.
+            The following configurations are supported:
+
+                - ``'gradient'`` - Analytically compute the gradient after optimization finishes, but do not compute the
+                  Hessian. Since Jacobians needed to compute standard errors will already be computed, gradient
+                  computation will not take a long time. This option may be useful if Hessian computation takes a long
+                  time when, for example, there are a large number of parameters.
+
+                - ``'both'`` (default) - Also compute the Hessian with central finite differences after optimization
+                  finishes.
+
+        finite_differences : `bool, optional`
+            Whether to use finite differences to compute Jacobians and the gradient instead of analytic expressions.
+            Since finite differences comes with numerical approximation error and is typically slower, analytic
+            expressions are used by default.
+
+            One situation in which finite differences may be preferable is when there are a sufficiently large number of
+            products and integration nodes in individual markets to make computing analytic Jacobians infeasible because
+            of memory requirements. Note that an analytic expression for the Hessian has not been implemented, so when
+            computed it is always approximated with finite differences.
+
+        error_behavior : `str, optional`
+            How to handle any errors. For example, there can sometimes be overflow or underflow when computing
+            :math:`\delta(\theta)` at a large :math:`\hat{\theta}`. The following behaviors are supported:
+
+                - ``'revert'`` (default) - Revert problematic values to their last computed values. If there are
+                  problematic values during the first objective evaluation, revert values in :math:`\delta(\theta)` to
+                  their starting values; in :math:`\tilde{c}(\hat{\theta})`, to prices; in the objective, to ``1e10``;
+                  and in other matrices such as Jacobians, to zeros.
+
+                - ``'punish'`` - Set the objective to ``1`` and its gradient to all zeros. This option along with a
+                  large ``error_punishment`` can be helpful for routines that do not use analytic gradients.
+
+                - ``'raise'`` - Raise an exception.
+
+        error_punishment : `float, optional`
+            How to scale the GMM objective value after an error. By default, the objective value is not scaled.
+        delta_behavior : `str, optional`
+            Configuration for the values at which the fixed point computation of :math:`\delta(\theta)` in each market
+            will start. This configuration is only relevant if there are unfixed nonlinear parameters over which to
+            optimize. The following behaviors are supported:
+
+                - ``'first'`` (default) - Start at the values configured by ``delta`` during the first GMM step, and at
+                  the values computed by the last GMM step for each subsequent step.
+
+                - ``'logit'`` - Start at the solution to the logit model in :eq:`logit_delta`, or if :math:`\rho` is
+                  specified, the solution to the nested logit model in :eq:`nested_logit_delta`. If the initial
+                  ``delta`` is left unspecified and there is no nesting parameter being optimized over, this will
+                  generally be equivalent to ``'first'``.
+
+                - ``'last'`` - Start at the values of :math:`\delta(\theta)` computed during the last objective
+                  evaluation, or, if this is the first evaluation, at the values configured by ``delta``. This behavior
+                  tends to speed up computation but may introduce some instability into estimation.
+
+        iteration : `Iteration, optional`
+            :class:`Iteration` configuration for how to solve the fixed point problem used to compute
+            :math:`\delta(\theta)` in each market. This configuration is only relevant if there are nonlinear
+            parameters, since :math:`\delta` can be estimated analytically in the logit model. By default,
+            ``Iteration('squarem', {'atol': 1e-14})`` is used. Newton-based routines such as ``Iteration('lm'`)`` that
+            compute the Jacobian can often be faster (especially when there are nesting parameters), but the
+            Jacobian-free SQUAREM routine is used by default because it speed is often comparable and in practice it can
+            be slightly more stable.
+        fp_type : `str, optional`
+            Configuration for the type of contraction mapping used to compute :math:`\delta(\theta)`. The following
+            types are supported:
+
+                - ``'safe_linear'`` (default) - The standard linear contraction mapping in :eq:`contraction` (or
+                  :eq:`nested_contraction` when there is nesting) with safeguards against numerical overflow.
+                  Specifically, :math:`\max_j V_{ijt}` (or :math:`\max_j V_{ijt} / (1 - \rho_{h(j)})` when there is
+                  nesting) is subtracted from :math:`V_{ijt}` and the logit expression for choice probabilities in
+                  :eq:`probabilities` (or :eq:`nested_probabilities`) is re-scaled accordingly. Such re-scaling is known
+                  as the log-sum-exp trick.
+
+                - ``'linear'`` - The standard linear contraction mapping without safeguards against numerical overflow.
+                  This option may be preferable to ``'safe_linear'`` if utilities are reasonably small and unlikely to
+                  create overflow problems.
+
+                - ``'nonlinear'`` - Iteration over :math:`\exp \delta_{jt}` instead of :math:`\delta_{jt}`. This can be
+                  faster than ``'linear'`` because it involves fewer logarithms. Also, following
+                  :ref:`references:Brunner, Heiss, Romahn, and Weiser (2017)`, the :math:`\exp \delta_{jt}` term can be
+                  cancelled out of the expression because it also appears in the numerator of :eq:`probabilities` in the
+                  definition of :math:`s_{jt}(\delta, \theta)`. This second trick only works when there are no
+                  nesting parameters.
+
+                - ``'safe_nonlinear'`` - Exponentiated version with minimal safeguards against numerical overflow.
+                  Specifically, :math:`\max_j \mu_{ijt}` is subtracted from :math:`\mu_{ijt}`. This helps with stability
+                  but is less helpful than subtracting from the full :math:`V_{ijt}`, so this version is less stable
+                  than ``'safe_linear'``.
+
+            This option is only relevant if ``sigma`` or ``pi`` are specified because :math:`\delta` can be estimated
+            analytically in the logit model with :eq:`logit_delta` and in the nested logit model with
+            :eq:`nested_logit_delta`.
+
+        shares_bounds : `tuple, optional`
+            Configuration for :math:`s_{jt}(\delta, \theta)` bounds in the contraction in :eq:`contraction` of the form
+            ``(lb, ub)``, in which both ``lb`` and ``ub`` are floats or ``None``. By default, simulated shares are
+            bounded from below by ``1e-300``. This is only relevant if ``fp_type`` is ``'safe_linear'`` or ``'linear'``.
+            Bounding shares in the contraction does nothing with a nonlinear fixed point.
+
+            It can be particularly helpful to bound shares in the contraction from below by a small number to prevent
+            the contraction from failing when there are issues with zero or negative simulated shares. Zero shares can
+            occur when there are underflow issues and negative shares can occur when there are issues with the numerical
+            integration routine having negative integration weights (e.g., for sparse grid integration).
+
+            The idea is that a small lower bound will allow the contraction to converge even when it encounters some
+            issues with small or negative shares. However, if these issues are unlikely, disabling this behavior can
+            speed up the iteration routine because fewer checks will be done.
+
+            Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+
+        costs_bounds : `tuple, optional`
+            Configuration for :math:`c_{jt}(\theta)` bounds of the form ``(lb, ub)``, in which both ``lb`` and ``ub``
+            are floats or ``None``. This is only relevant if :math:`X_3` was formulated by ``product_formulations`` in
+            :class:`Problem`. By default, marginal costs are unbounded.
+
+            When ``costs_type`` in :class:`Problem` is ``'log'``, nonpositive :math:`c(\theta)` values can create
+            problems when computing :math:`\tilde{c}(\theta) = \log c(\theta)`. One solution is to set ``lb`` to a small
+            number. Rows in Jacobians associated with clipped marginal costs will be zero.
+
+            Both ``None`` and ``numpy.nan`` are converted to ``-numpy.inf`` in ``lb`` and to ``numpy.inf`` in ``ub``.
+
+        W : `array-like, optional`
+            Starting values for the weighting matrix, :math:`W`. By default, the 2SLS weighting matrix in :eq:`2sls_W`
+            is used, unless there are any ``micro_moments``, in which case an ``initial_update`` will be used to update
+            starting values :math:`W` and the mean utility :math:`\delta` at the initial parameter values before the
+            first GMM step.
+        center_moments : `bool, optional`
+            Whether to center each column of the demand- and supply-side moments :math:`g` before updating the weighting
+            matrix :math:`W` according to :eq:`W`. By default, the moments are centered. This has no effect if
+            ``W_type`` is ``'unadjusted'``.
+        W_type : `str, optional`
+            How to update the weighting matrix. This has no effect if ``method`` is ``'1s'``. Usually, ``se_type``
+            should be the same. The following types are supported:
+
+                - ``'robust'`` (default) - Heteroscedasticity robust weighting matrix defined in :eq:`W` and
+                  :eq:`robust_S`.
+
+                - ``'clustered'`` - Clustered weighting matrix defined in :eq:`W` and :eq:`clustered_S`. Clusters must
+                  be defined by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
+
+                - ``'unadjusted'`` - Homoskedastic weighting matrix defined in :eq:`W` and :eq:`unadjusted_S`.
+
+            This only affects the standard demand- and supply-side block of the updated weighting matrix. If there are
+            micro moments, this matrix will be block-diagonal with a micro moment block equal to the inverse of the
+            scaled covariance matrix defined in :eq:`scaled_micro_moment_covariances`.
+
+        se_type : `str, optional`
+            How to compute parameter covariances and standard errors. Usually, ``W_type`` should be the same. The
+            following types are supported:
+
+                - ``'robust'`` (default) - Heteroscedasticity robust covariances defined in :eq:`covariances` and
+                  :eq:`robust_S`.
+
+                - ``'clustered'`` - Clustered covariances defined in :eq:`covariances` and :eq:`clustered_S`. Clusters
+                  must be defined by the ``clustering_ids`` field of ``product_data`` in :class:`Problem`.
+
+                - ``'unadjusted'`` - Homoskedastic covariances defined in :eq:`unadjusted_covariances`, which are
+                  computed under the assumption that the weighting matrix is optimal.
+
+            This only affects the standard demand- and supply-side block of the matrix of averaged moment covariances.
+            If there are micro moments, the :math:`S` matrix defined in the expressions referenced above will be
+            block-diagonal with a micro moment block equal to the scaled covariance matrix defined in
+            :eq:`scaled_micro_moment_covariances`.
+
+        micro_moments : `sequence of MicroMoment, optional`
+            Configurations for the :math:`M_M` :class:`MicroMoment` instances that will be added to the standard set of
+            moments. By default, no micro moments are used, so :math:`M_M = 0`.
+
+            When micro moments are specified, unless an initial weighting matrix ``W`` is specified as well (with a
+            lower right micro moment block that reflects micro moment covariances), an ``initial_update`` will be used
+            to update starting values :math:`W` and the mean utility :math:`\delta` at the initial parameter values
+            before the first GMM step.
+
+            .. note::
+
+               When trying multiple parameter starting values to verify that the optimization routine converges to the
+               same optimum, using ``initial_update`` is not recommended because different weighting matrices will be
+               used for these different runs. A better option is to use ``optimization=Optimization('return')`` at the
+               best guess for parameter values and pass :attr:`ProblemResults.updated_W` to ``W`` for each set of
+               different parameter starting values.
+
+        micro_sample_covariances : `array-like, optional`
+            Sample covariance matrix for the :math:`M_M` micro moments. By default, their asymptotic covariance matrix
+            is computed according to :eq:`scaled_micro_moment_covariances`. This override could be used, for example, if
+            instead of estimating covariances at some estimated :math:`\hat{\theta}`, one wanted to use a boostrap
+            procedure to compute their covariances directly from the micro data.
+
+        resample_agent_data : `callable, optional`
+            If specified, simulation error in moment covariances will be accounted for by resampling
+            :math:`r = 1, \dots, R` sets of agents by iteratively calling this function, which should be of the
+            following form::
+
+                resample_agent_data(index) --> agent_data or None
+
+            where ``index`` increments from ``0`` to ``1`` and so on and ``agent_data`` is the corresponding resampled
+            agent data, which should be a resampled version of the ``agent_data`` passed to :class:`Problem`. Each
+            ``index`` should correspond to a different set of randomly drawn agent data, with different integration
+            nodes and demographics. If ``index`` is larger than :math:`R - 1`, this function should return ``None``,
+            at which point agents will stop being resampled.
+
+        Returns
+        -------
+        `ProblemResults`
+            :class:`ProblemResults` of the solved problem.
+
+        Examples
+        --------
+            - :doc:`Tutorial </tutorial>`
+
+        """
+
+        # keep track of how long it takes to solve the problem
+        output("Solving the problem ...")
+        step_start_time = time.time()
+
+        # validate settings
+        if method not in {'1s', '2s'}:
+            raise TypeError("method must be '1s' or '2s'.")
+        if optimization is None:
+            optimization = Optimization('l-bfgs-b', {'ftol': 0, 'gtol': 1e-8})
+        elif not isinstance(optimization, Optimization):
+            raise TypeError("optimization must be None or an Optimization instance.")
+        if check_optimality not in {'gradient', 'both'}:
+            raise ValueError("check_optimality must be 'gradient' or 'both'.")
+        if error_behavior not in {'revert', 'punish', 'raise'}:
+            raise ValueError("error_behavior must be 'revert', 'punish', or 'raise'.")
+        if not isinstance(error_punishment, (float, int)) or error_punishment < 0:
+            raise ValueError("error_punishment must be a positive float.")
+        if delta_behavior not in {'last', 'logit', 'first'}:
+            raise ValueError("delta_behavior must be 'last', 'logit', or 'first'.")
+        iteration = self._coerce_optional_delta_iteration(iteration)
+        self._validate_fp_type(fp_type)
+        if W_type not in {'robust', 'unadjusted', 'clustered'}:
+            raise ValueError("W_type must be 'robust', 'unadjusted', or 'clustered'.")
+        if se_type not in {'robust', 'unadjusted', 'clustered'}:
+            raise ValueError("se_type must be 'robust', 'unadjusted', or 'clustered'.")
+        if 'clustered' in {W_type, se_type}:
+            if 'clustering_ids' not in self.products.dtype.names or self.products.clustering_ids.size == 0:
+                raise ValueError(
+                    "W_type or se_type is 'clustered' but clustering_ids were not specified in product_data."
+                )
+
+        # configure or validate bounds on shares and costs
+        shares_bounds = self._coerce_optional_bounds(shares_bounds, 'shares_bounds')
+        costs_bounds = self._coerce_optional_bounds(costs_bounds, 'costs_bounds')
+
+        # validate and structure micro moments before outputting related information
+        moments = Moments(micro_moments, self)
+        micro_moment_covariances = None
+        if moments.MM > 0:
+            output("")
+            output(moments.format("Micro Moments"))
+            if micro_sample_covariances is not None:
+                micro_moment_covariances = np.c_[np.asarray(micro_sample_covariances, options.dtype)]
+                if micro_moment_covariances.shape != (moments.MM, moments.MM):
+                    raise ValueError(f"micro_sample_covariances must be a square {moments.MM} by {moments.MM} matrix.")
+                self._require_psd(micro_moment_covariances, "micro_sample_covariances")
+                self._detect_singularity(micro_moment_covariances, "micro_sample_covariances")
+
+        # determine whether to check micro moment collinearity
+        detect_micro_collinearity = (
+            moments.MM > 0 and
+            options.detect_micro_collinearity and
+            (options.collinear_atol > 0 or options.collinear_rtol > 0)
+        )
+
+        # validate any agent data resampler
+        if resample_agent_data is not None and not callable(resample_agent_data):
+            raise TypeError("resample_agent_data must be None or a function.")
+
+        # choose whether to do an initial update
+        if initial_update is None:
+            initial_update = bool(moments.MM > 0 and W is None)
+        elif not initial_update and moments.MM > 0 and W is None:
+            raise ValueError("initial_update cannot be False with micro_moments and no initial W specified.")
+
+        # validate parameters before compressing unfixed parameters into theta and outputting related information
+        parameters = Parameters(
+            self, sigma, pi, rho, beta, gamma, sigma_bounds, pi_bounds, rho_bounds, beta_bounds, gamma_bounds,
+            bounded=optimization._supports_bounds, allow_linear_nans=True
+        )
+        theta = parameters.compress()
+        theta_bounds = parameters.compress_bounds()
+        if parameters.fixed or parameters.unfixed:
+            output("")
+            output(parameters.format("Initial Values"))
+            if parameters.fixed or optimization._supports_bounds:
+                output("")
+                output(parameters.format_lower_bounds("Lower Bounds"))
+                output("")
+                output(parameters.format_upper_bounds("Upper Bounds"))
+                output("")
+
+        # load or compute the weighting matrix
+        if W is not None:
+            W = np.c_[np.asarray(W, options.dtype)]
+            M = self.MD + self.MS + moments.MM
+            if W.shape != (M, M):
+                raise ValueError(f"W must be a square {M} by {M} matrix.")
+            self._require_psd(W, "W")
+            self._detect_singularity(W, "W")
+        else:
+            S = scipy.linalg.block_diag(
+                self.products.ZD.T @ self.products.ZD / self.N,
+                self.products.ZS.T @ self.products.ZS / self.N,
+            )
+            self._detect_singularity(S, "the 2SLS weighting matrix")
+            W, successful = precisely_invert(S)
+            if not successful:
+                raise ValueError("Failed to compute the 2SLS weighting matrix. There may be instrument collinearity.")
+
+            # an initial update will be used when there are micro moments, so this initial block does not matter
+            if moments.MM > 0:
+                assert initial_update
+                W = scipy.linalg.block_diag(W, np.zeros((moments.MM, moments.MM), options.dtype))
+
+        # compute or load initial delta values
+        if delta is None:
+            delta = self._compute_logit_delta(parameters.rho)
+        else:
+            delta = np.c_[np.asarray(delta, options.dtype)]
+            if delta.shape != (self.N, 1):
+                raise ValueError(f"delta must be a vector with {self.N} elements.")
+
+        # initialize marginal costs as prices, which will only be used if there are computation errors during the first
+        #   objective evaluation
+        tilde_costs = np.full((self.N, 0), np.nan, options.dtype)
+        if self.K3 > 0:
+            if self.costs_type == 'linear':
+                tilde_costs = self.products.prices
+            else:
+                assert self.costs_type == 'log'
+                tilde_costs = np.log(self.products.prices)
+
+        # initialize micro moments as all zeros, which will only be used if there are computation errors during the
+        #   first objective evaluation
+        micro = np.zeros((moments.MM, 1), options.dtype)
+
+        # initialize Jacobians as all zeros, which will only be used if there are computation errors during the first
+        #   objective evaluation
+        xi_jacobian = np.zeros((self.N, parameters.P), options.dtype)
+        omega_jacobian = np.full((self.N, parameters.P), 0 if self.K3 > 0 else np.nan, options.dtype)
+        micro_jacobian = np.zeros((moments.MM, parameters.P), options.dtype)
+
+        # initialize the objective as a large number and its gradient and hessian as all zeros, which will only be used
+        #   if there are computation errors during the first objective evaluation
+        objective = np.array(1e10, options.dtype)
+        gradient = np.zeros((parameters.P, 1), options.dtype)
+        hessian = np.zeros((parameters.P, parameters.P), options.dtype)
+
+        # iterate over each GMM step
+        step = 0 if initial_update else 1
+        last_results = None
+        while True:
+            # collect inputs into linear parameter estimation
+            X_list = [self.products.X1[:, parameters.eliminated_beta_index.flat]]
+            Z_list = [self.products.ZD]
+            if self.K3 > 0:
+                X_list.append(self.products.X3[:, parameters.eliminated_gamma_index.flat])
+                Z_list.append(self.products.ZS)
+
+            # initialize an IV model for linear parameter estimation
+            iv = IV(X_list, Z_list, W[:self.MD + self.MS, :self.MD + self.MS])
+            self._handle_errors(iv.errors, error_behavior)
+
+            # wrap computation of progress information with step-specific information
+            compute_step_progress = functools.partial(
+                self._compute_progress, parameters, moments, iv, W, scale_objective, error_behavior, error_punishment,
+                delta_behavior, iteration, fp_type, shares_bounds, costs_bounds, finite_differences, resample_agent_data
+            )
+
+            # initialize optimization progress
+            iteration_stats: List[Dict[Hashable, SolverStats]] = []
+            smallest_objective = np.inf
+            progress = InitialProgress(
+                self, parameters, moments, W, theta, objective, gradient, hessian, delta, delta, tilde_costs, micro,
+                xi_jacobian, omega_jacobian, micro_jacobian
+            )
+
+            # define the objective function
+            def wrapper(new_theta: Array, iterations: int, evaluations: int) -> ObjectiveResults:
+                """Compute and output progress associated with a single objective evaluation."""
+                nonlocal iteration_stats, smallest_objective, progress, detect_micro_collinearity
+                assert optimization is not None and shares_bounds is not None and costs_bounds is not None
+                progress = compute_step_progress(
+                    new_theta, progress, optimization._compute_gradient, compute_hessian=False,
+                    compute_micro_covariances=False, detect_micro_collinearity=detect_micro_collinearity,
+                    compute_simulation_covariances=False,
+                )
+                iteration_stats.append(progress.iteration_stats)
+                formatted_progress = progress.format(
+                    optimization, shares_bounds, costs_bounds, step, iterations, evaluations, smallest_objective
+                )
+                if formatted_progress:
+                    output(formatted_progress)
+                smallest_objective = min(smallest_objective, progress.objective)
+                detect_micro_collinearity = False
+                return progress.objective, progress.gradient if optimization._compute_gradient else None
+
+            # Run wrapper to change the values inside progress            
+            wrapper(theta, 1, 1)
+
+            # identify what will be done when computing results
+            compute_gradient = parameters.P > 0
+            compute_hessian = compute_gradient and check_optimality == 'both' and step > 0
+            compute_micro_covariances = moments.MM > 0 and micro_moment_covariances is None
+            compute_simulation_covariances = resample_agent_data is not None
+
+            # use progress information computed at the optimal theta to compute results for the step
+            final_progress = compute_step_progress(
+                theta, progress, compute_gradient, compute_hessian, compute_micro_covariances,
+                detect_micro_collinearity, compute_simulation_covariances
+            )
+            iteration_stats.append(final_progress.iteration_stats)
+            detect_micro_collinearity = False
+            results = ProblemResults(
+                final_progress, last_results, step, True, step_start_time, 1,
+                0, SolverStats(), iteration_stats, scale_objective, shares_bounds,
+                costs_bounds, micro_moment_covariances, center_moments, W_type, se_type
+            )
+            self._handle_errors(results._errors, error_behavior)
+            output(f"Computed results after {format_seconds(results.total_time - results.optimization_time)}.")
+
+            return results
+
+            # store the last results and return results from the final step
+            # last_results = results
+            # output("")
+            # if last_step:
+            #     output(results)
+            #     return results
+            # if step > 0:
+            #     output(results._format_summary())
+            #     output("")
+
+            # # update vectors and matrices
+            # delta = results.delta
+            # tilde_costs = results.tilde_costs
+            # xi_jacobian = results.xi_by_theta_jacobian
+            # omega_jacobian = results.omega_by_theta_jacobian
+            # W = results.updated_W
+            # step += 1
+            # step_start_time = time.time()
+
+
     def _compute_progress(
             self, parameters: Parameters, moments: Moments, iv: IV, W: Array, scale_objective: bool,
             error_behavior: str, error_punishment: float, delta_behavior: str, iteration: Iteration, fp_type: str,
