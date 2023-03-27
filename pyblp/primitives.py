@@ -93,6 +93,8 @@ class Products(object):
         X1, X1_formulations, X1_data = product_formulations[0]._build_matrix(product_data)
         if 'shares' in X1_data:
             raise NameError("shares cannot be included in the formulation for X1.")
+        if X1 is not None and not np.isfinite(X1).all():
+            raise ValueError("Variables in product_data that contribute to X1 should not have NaNs or infinities.")
 
         # build X2
         X2 = None
@@ -105,6 +107,8 @@ class Products(object):
             X2 = np.append(X2, zero_mat, 1)
             if 'shares' in X2_data:
                 raise NameError("shares cannot be included in the formulation for X2.")
+            if X2 is not None and not np.isfinite(X2).all():
+                raise ValueError("Variables in product_data that contribute to X2 should not have NaNs or infinities.")
 
         # check that prices are in X1 or X2
         if 'prices' not in X1_data and 'prices' not in X2_data:
@@ -118,11 +122,15 @@ class Products(object):
             X3, X3_formulations, X3_data = product_formulations[2]._build_matrix(product_data)
             if 'prices' in X3_data:
                 raise NameError("prices cannot be included in the formulation for X3.")
+            if X3 is not None and not np.isfinite(X3).all():
+                raise ValueError("Variables in product_data that contribute to X3 should not have NaNs or infinities.")
 
         # load excluded demand-side instruments and supplement them with exogenous characteristics in X1
         ZD = None
         if instruments:
             ZD = extract_matrix(product_data, 'demand_instruments')
+            if ZD is not None and not np.isfinite(ZD).all():
+                raise ValueError("The demand_instruments field of product_data should not have NaNs or infinities.")
             if add_exogenous:
                 for index, formulation in enumerate(X1_formulations):
                     if 'prices' not in formulation.names:
@@ -132,6 +140,8 @@ class Products(object):
         ZS = None
         if instruments and X3 is not None:
             ZS = extract_matrix(product_data, 'supply_instruments')
+            if ZS is not None and not np.isfinite(ZS).all():
+                raise ValueError("The supply_instruments field of product_data should not have NaNs or infinities.")
             if add_exogenous:
                 for index, formulation in enumerate(X3_formulations):
                     if 'shares' not in formulation.names:
@@ -161,8 +171,6 @@ class Products(object):
             raise ValueError("The firm_ids field of product_data must be one-dimensional.")
         if nesting_ids is not None and nesting_ids.shape[1] > 1:
             raise ValueError("The nesting_ids field of product_data must be one-dimensional.")
-        if product_ids is not None and product_ids.shape[1] > 1:
-            raise ValueError("The product_ids field of product_data must be one-dimensional.")
         if clustering_ids is not None:
             if clustering_ids.shape[1] > 1:
                 raise ValueError("The clustering_ids field of product_data must be one-dimensional.")
@@ -175,10 +183,10 @@ class Products(object):
             raise KeyError("product_data must have a shares field.")
         if shares.shape[1] > 1:
             raise ValueError("The shares field of product_data must be one-dimensional.")
+        if not np.isfinite(shares).all():
+            raise ValueError("The shares field of product_data should not have NaNs or infinities.")
         if (shares <= 0).any() or (shares >= 1).any():
-            raise ValueError(
-                "The shares field of product_data must consist of values between zero and one, exclusive."
-            )
+            raise ValueError("The shares field of product_data must consist of values between zero and one, exclusive.")
 
         # verify that shares sum to less than one in each market
         market_groups = Groups(market_ids)
@@ -288,6 +296,10 @@ class Agents(object):
                     raise ValueError("agent_formulation does not support fixed effect absorption.")
                 demographics, demographics_formulations = build_demographics(products, agent_data, agent_formulation)
                 assert demographics is not None
+                if len(demographics.shape) == 2 and not np.isfinite(demographics).all():
+                    raise ValueError(
+                        "Variables in agent_data that contribute to demographics should not have NaNs or infinities."
+                    )
 
             # load IDs
             if agent_data is not None:
@@ -336,8 +348,12 @@ class Agents(object):
                     if check_weights:
                         raise KeyError("Since integration is None, agent_data must have weights.")
                     weights = np.full((nodes.shape[0], 1), np.nan, options.dtype)
+                elif not np.isfinite(weights).all():
+                    raise ValueError("The weights field in agent_data should not have NaNs or infinities.")
                 if weights.shape[1] != 1:
                     raise ValueError("The weights field of agent_data must be one-dimensional.")
+                if not np.isfinite(nodes).all():
+                    raise ValueError("The nodes field in agent_data should not have NaNs or infinities.")
 
                 # delete columns of nodes if there are too many
                 if nodes.shape[1] > K2:
@@ -500,7 +516,7 @@ def build_demographics(
         for j in range(max_J):
             try:
                 demographics_j, demographics_formulations, _ = agent_formulation._build_matrix(
-                    data, fallback_index=j
+                    data, fallback_index=j, ignore_na=True
                 )
             except patsy.PatsyError as exception_j:
                 if j == 0:

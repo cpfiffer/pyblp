@@ -51,6 +51,26 @@ class MicroDataset(StringRepresentation):
             - :math:`I \times (1 + J_t)`: The first column indexes the outside option, which can have nonzero survey
               weights :math:`w_{di0t}`.
 
+        .. warning::
+
+            If using different lambda functions to define different ``compute_weights`` functions in a loop, any
+            variables that are changing within the loop should be passed as extra arguments to the function to preserve
+            their scope. For example, ``lambda t, p, a: weights[t]`` where ``weights`` is some dictionary that is
+            changing in the outer loop should instead be ``lambda t, p, a, weights=weights: weights[t]``; otherwise,
+            the ``weights`` in the current loop's iteration will be lost.
+
+        .. warning::
+
+            If using product-specific demographics, ``agents.demographics`` will be a :math:`I_t \times D \times J_t`
+            array, instead of a :math:`I_t \times D` array like usual. Non-product specific demographics will be
+            repeated :math:`J_t` times.
+
+        .. note::
+
+            Particularly when using product-specific demographics or second choices, it may be convenient to use
+            ``numpy.einsum``, which handles many multiplying multi-dimensional arrays with common dimensions in an
+            elegant way.
+
         If the micro dataset contains second choice data, ``weights`` can have a third axis corresponding to second
         choices :math:`k` in :math:`w_{dijkt}`:
 
@@ -72,6 +92,12 @@ class MicroDataset(StringRepresentation):
             issue, consider setting ``pyblp.options.micro_computation_chunks`` to a value higher than its default of
             ``1``, such as the highest :math:`J_t`. This will cut down on memory usage without much affecting speed.
 
+    eliminated_product_ids_index : `int, optional`
+        This option determines whether the dataset's second choices are after only the first choice product :math:`j` is
+        eliminated from the choice set, in which case this should be ``None``, the default, or if a group of products
+        including the first choice product is eliminated, in which case this should be a number between ``0`` and the
+        number of columns in the ``product_ids`` field of ``product_data`` minus one, inclusive. The column of
+        ``product_ids`` determines the groups.
     market_ids : `array-like, optional`
         Distinct market IDs with nonzero survey weights :math:`w_{dijt}`. For other markets, :math:`w_{dijt} = 0`, and
         ``compute_weights`` will not be called.
@@ -86,9 +112,11 @@ class MicroDataset(StringRepresentation):
     observations: int
     compute_weights: functools.partial
     market_ids: Optional[Set]
+    eliminated_product_ids_index: Optional[int]
 
     def __init__(
             self, name: str, observations: int, compute_weights: Callable,
+            eliminated_product_ids_index: Optional[int] = None,
             market_ids: Optional[Union[Sequence, Array]] = None) -> None:
         """Validate information to the greatest extent possible without an economy or calling the function."""
         if not isinstance(name, str):
@@ -101,6 +129,12 @@ class MicroDataset(StringRepresentation):
         self.name = name
         self.observations = observations
         self.compute_weights = functools.partial(compute_weights)
+
+        # validate the product IDs index
+        self.eliminated_product_ids_index = eliminated_product_ids_index
+        if eliminated_product_ids_index is not None:
+            if not isinstance(eliminated_product_ids_index, int) or eliminated_product_ids_index < 0:
+                raise ValueError("eliminated_product_ids_index must be None or a non-negative int.")
 
         # validate market IDs, checking for duplicates
         if market_ids is None:
@@ -120,7 +154,11 @@ class MicroDataset(StringRepresentation):
         return f"{self.name}: {self.observations} Observations in {self._format_markets(text=True)}"
 
     def _validate(self, economy: 'Economy') -> None:
-        """Check that all market IDs associated with this dataset are in the economy."""
+        """Check that all market IDs associated with this dataset are in the economy and that any eliminated product
+        IDs index is valid.
+        """
+        if self.eliminated_product_ids_index is not None:
+            economy._validate_product_ids_index(self.eliminated_product_ids_index)
         if self.market_ids is not None:
             extra_ids = self.market_ids - set(economy.unique_market_ids)
             if extra_ids:
@@ -166,6 +204,27 @@ class MicroPart(StringRepresentation):
         ``pyblp.options.micro_computation_chunks`` is larger than its default of ``1``, in which case ``agents`` is a
         chunk of the market's :class:`Agents`. The returned ``values`` should be an array of the same shape as the
         ``weights`` returned by ``compute_weights`` of ``dataset``.
+
+        .. warning::
+
+            If using different lambda functions to define different ``compute_values`` functions in a loop, any
+            variables that are changing within the loop should be passed as extra arguments to the function to preserve
+            their scope. For example, ``lambda t, p, a: np.outer(a.demographics[:, d], p.X2[:, c])`` where ``d`` and
+            ``c`` are indices that are changing in the outer loop should instead be
+            ``lambda t, p, a, d=d, c=c: np.outer(a.demographics[:, d], p.X2[:, c])``; otherwise, the values of ``d``
+            and ``c`` in the current loop's iteration will be lost.
+
+        .. warning::
+
+            If using product-specific demographics, ``agents.demographics`` will be a :math:`I_t \times D \times J_t`
+            array, instead of a :math:`I_t \times D` array like usual. Non-product specific demographics will be
+            repeated :math:`J_t` times.
+
+        .. note::
+
+            Particularly when using product-specific demographics or second choices, it may be convenient to use
+            ``numpy.einsum``, which handles many multiplying multi-dimensional arrays with common dimensions in an
+            elegant way.
 
     Examples
     --------

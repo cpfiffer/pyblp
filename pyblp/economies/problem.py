@@ -641,14 +641,17 @@ class ProblemEconomy(Economy):
                 """Compute and output progress associated with a single objective evaluation."""
                 nonlocal iteration_stats, smallest_objective, progress, detect_micro_collinearity
                 assert optimization is not None and shares_bounds is not None and costs_bounds is not None
+                progress_start_time = time.time()
                 progress = compute_step_progress(
                     new_theta, progress, optimization._compute_gradient, compute_hessian=False,
                     compute_micro_covariances=False, detect_micro_collinearity=detect_micro_collinearity,
                     compute_simulation_covariances=False,
                 )
                 iteration_stats.append(progress.iteration_stats)
+                progress_time = time.time() - progress_start_time
                 formatted_progress = progress.format(
-                    optimization, shares_bounds, costs_bounds, step, iterations, evaluations, smallest_objective
+                    optimization, shares_bounds, costs_bounds, step, iterations, evaluations, progress_time,
+                    smallest_objective
                 )
                 if formatted_progress:
                     output(formatted_progress)
@@ -1938,7 +1941,8 @@ class Problem(ProblemEconomy):
 
         It may be convenient to define IDs for different products:
 
-            - **product_ids** (`object, optional`) - IDs that identify products within markets.
+            - **product_ids** (`object, optional`) - IDs that identify products within markets. There can be multiple
+              columns.
 
         Finally, clustering groups can be specified to account for within-group correlation while updating the weighting
         matrix and estimating standard errors:
@@ -2405,7 +2409,7 @@ class Progress(InitialProgress):
 
     def format(
             self, optimization: Optimization, shares_bounds: Bounds, costs_bounds: Bounds, step: int, iterations: int,
-            evaluations: int, smallest_objective: Array) -> str:
+            evaluations: int, progress_time: float, smallest_objective: Array) -> str:
         """Format a universal display of optimization progress as a string. The first iteration will include the
         progress table header. If there are any errors, information about them will be formatted as well, regardless of
         whether or not a universal display is to be used. The smallest_objective is the smallest objective value
@@ -2429,11 +2433,12 @@ class Progress(InitialProgress):
 
         # construct the leftmost part of the table that always shows up
         header = [
-            ("GMM", "Step"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
+            ("GMM", "Step"), ("Computation", "Time"), ("Optimization", "Iterations"), ("Objective", "Evaluations"),
             ("Fixed Point", "Iterations"), ("Contraction", "Evaluations")
         ]
         values = [
             str(step),
+            format_seconds(progress_time),
             str(iterations),
             str(evaluations),
             str(sum(s.iterations for s in self.iteration_stats.values())),
