@@ -1,5 +1,6 @@
 """Public-facing objects."""
 
+print("Loading cameron's pyblp")
 from . import data, exceptions, options
 from .configurations.formulation import Formulation
 from .configurations.integration import Integration
